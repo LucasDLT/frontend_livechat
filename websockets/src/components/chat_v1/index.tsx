@@ -47,7 +47,7 @@ export default function WsTestPage() {
   return (
     <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-xl shadow-md">
       <h1 className="text-2xl font-bold text-gray-800 mb-4 text-center">
-        Livechat 
+        chucho's chat 
       </h1>
 
       <div className="border border-gray-300 rounded-md p-3 h-64 overflow-y-auto mb-4 bg-gray-50">
