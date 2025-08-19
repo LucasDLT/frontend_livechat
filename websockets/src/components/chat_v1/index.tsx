@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 export default function WsTestPage() {
   const [messages, setMessages] = useState<string[]>([]);
   const [input, setInput] = useState("");
   const [socket, setSocket] = useState<WebSocket | null>(null);
-  const PORT = process.env.NEXT_PUBLIC_API_URL || "" ;
+  const PORT = process.env.NEXT_PUBLIC_API_URL || "";
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
-    // Crear conexión al servidor WS
     const ws = new WebSocket(PORT);
 
     ws.onopen = () => {
@@ -28,11 +29,12 @@ export default function WsTestPage() {
 
     setSocket(ws);
 
-    // Cerrar conexión cuando desmonta
-    return () => {
-      ws.close();
-    };
+    return () => ws.close();
   }, []);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   const sendMessage = () => {
     if (socket && input.trim()) {
@@ -43,32 +45,36 @@ export default function WsTestPage() {
   };
 
   return (
-    <div style={{ padding: "20px" }}>
-      <h1>Chat con WebSocket 🚀</h1>
+    <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-xl shadow-md">
+      <h1 className="text-2xl font-bold text-gray-800 mb-4 text-center">
+        Livechat 
+      </h1>
 
-      <div
-        style={{
-          border: "1px solid #ccc",
-          padding: "10px",
-          height: "200px",
-          overflowY: "auto",
-          marginBottom: "10px",
-        }}
-      >
+      <div className="border border-gray-300 rounded-md p-3 h-64 overflow-y-auto mb-4 bg-gray-50">
         {messages.map((msg, i) => (
-          <div key={i}>{msg}</div>
+          <div key={i} className="mb-1 text-gray-700">
+            {msg}
+          </div>
         ))}
+        <div ref={messagesEndRef} />
       </div>
 
-      <input
-        type="text"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        style={{ padding: "5px" }}
-      />  
-      <button onClick={sendMessage} style={{ marginLeft: "10px", padding: "5px" }}>
-        Enviar
-      </button>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          className="flex-1 px-3 py-2 text-gray-700 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400"
+          placeholder="Escribe tu mensaje..."
+          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+        />
+        <button
+          onClick={sendMessage}
+          className="px-4 py-2 bg-blue-500 text-white font-semibold rounded-md hover:bg-blue-600 transition"
+        >
+          Enviar
+        </button>
+      </div>
     </div>
   );
 }
