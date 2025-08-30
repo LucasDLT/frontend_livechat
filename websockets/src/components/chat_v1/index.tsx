@@ -1,80 +1,117 @@
 "use client";
+import React, { useEffect, useState, useRef } from "react";
+import { ChatMessageSend, ClientToServerMessage, PrivateMessageSend, ServerToClientMessage } from "@/types/messages";
+import ChatFeed from "@/components/ChatFeed";
+import MessageInput from "@/components/MessageInput";
+import NicknameBar from "@/components/NicknameBar";
+import StatsPanel from "@/components/StatsPanel";
 
-import { useEffect, useState, useRef } from "react";
+const WS_URL = process.env.NEXT_PUBLIC_API_URL; // tu backend ya deployado
+console.log(WS_URL);
 
-export default function WsTestPage() {
-  const [messages, setMessages] = useState<string[]>([]);
-  const [input, setInput] = useState("");
-  const [socket, setSocket] = useState<WebSocket | null>(null);
-  const PORT = process.env.NEXT_PUBLIC_API_URL || "";
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+if (!WS_URL) {
+  throw new Error("NEXT_PUBLIC_API_URL no está definida");
+}
+const App: React.FC = () => {
+  const [messages, setMessages] = useState<ServerToClientMessage[]>([]);
+  const [users, setUsers] = useState<number>(0);
+  const [nickname, setNickname] = useState("Anonimo");
+  const [nicks, setNicks] = useState<string[]>([]);
+  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    const ws = new WebSocket(PORT);
+    const ws = new WebSocket(WS_URL);
+    wsRef.current = ws;
+    console.log("🚀 WS URL:", WS_URL);
+    console.log("wsRef.current:", wsRef.current);
 
-    ws.onopen = () => {
-      console.log("✅ Conectado al servidor WebSocket");
-      setMessages((prev) => [...prev, "Conectado al servidor ✅"]);
-    };
+    ws.onopen = () => console.log("✅ Connected");
+    ws.onclose = () => console.log("❌ Disconnected");
+    ws.onerror = (err) => console.error("⚠️ WS Error:", err);
 
     ws.onmessage = (event) => {
-      console.log("📩 Mensaje recibido:", event.data);
-      setMessages((prev) => [...prev, `Server: ${event.data}`]);
-    };
+      const msg: ServerToClientMessage = JSON.parse(event.data);
 
-    ws.onclose = () => {
-      console.log("❌ Conexión cerrada");
-      setMessages((prev) => [...prev, "Conexión cerrada ❌"]);
+      switch (msg.type) {
+        case "chat":
+        case "private":
+        case "system":
+          console.log("Recibiendo mensaje:", msg); // para depurar
+          setMessages((prev) => [...prev, msg]);
+          break;
+        case "stats":
+          setUsers(msg.payload.count);
+          setNicks(msg.payload.users);
+          console.log("🚀 Stats nicks:", msg.payload.users);
+          break;
+      }
     };
-
-    setSocket(ws);
 
     return () => ws.close();
   }, []);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  const sendMessage = () => {
-    if (socket && input.trim()) {
-      socket.send(input);
-      setMessages((prev) => [...prev, `Yo: ${input}`]);
-      setInput("");
+  const sendMessage = (msg: ClientToServerMessage) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(msg));
     }
   };
 
-  return (
-    <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-xl shadow-md">
-      <h1 className="text-2xl font-bold text-gray-800 mb-4 text-center">
-  Chucho&apos;s chat
-      </h1>
+const handleSendChat = (content: string, to?: string) => {
+  const timestamp = Date.now();
 
-      <div className="border border-gray-300 rounded-md p-3 h-64 overflow-y-auto mb-4 bg-gray-50">
-        {messages.map((msg, i) => (
-          <div key={i} className="mb-1 text-gray-700">
-            {msg}
-          </div>
-        ))}
-        <div ref={messagesEndRef} />
+  if (to) {
+    const msg: PrivateMessageSend = {
+      type: "private",
+      timestamp,
+      payload: {
+        to,
+        text:content, // debe llamarse "content"
+      },
+    };
+    sendMessage(msg);
+    setMessages(prev => [...prev, { ...msg, payload: { ...msg.payload, from: nickname } }]); // agrego localmente con from
+  } else {
+    const msg: ChatMessageSend = {
+      type: "chat",
+      timestamp,
+      payload: {
+        text:content, // debe llamarse "content"
+      },
+    };
+    sendMessage(msg);
+    setMessages(prev => [...prev, { ...msg, payload: { ...msg.payload, from: nickname } }]); // agrego localmente con from
+  }
+};
+
+
+  const handleSetNickname = (newName: string) => {
+    setNickname(newName);
+    sendMessage({
+      type: "setNickname",
+      timestamp: Date.now(),
+      payload: { nickname: newName },
+    });
+  };
+
+  return (
+    <div className="flex h-screen">
+      {/* Panel izquierdo */}
+      <div className="flex flex-col w-3/4 border-r">
+        <NicknameBar nickname={nickname} onChange={handleSetNickname} />
+        <ChatFeed messages={messages} selfNickname={nickname} />
+        <MessageInput onSend={handleSendChat} />
       </div>
 
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          className="flex-1 px-3 py-2 text-gray-700 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400"
-          placeholder="Escribe tu mensaje..."
-          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+      {/* Panel derecho */}
+      <div className="w-1/4 p-2">
+        <StatsPanel
+          totalNicknames={nicks}
+          users={users}
+          onPrivateChat={(u) => console.log("Privado con", u)}
         />
-        <button
-          onClick={sendMessage}
-          className="px-4 py-2 bg-blue-500 text-white font-semibold rounded-md hover:bg-blue-600 transition"
-        >
-          Enviar
-        </button>
       </div>
     </div>
   );
-}
+};
+
+export default App;
